@@ -1,14 +1,17 @@
 <?php
+ini_set("display_errors", 1);
+error_reporting(-1);
+
 abstract class RSSReader{
-    protected $xmlReader;
-    public function __construct(xmlReader $xmlReader){
-        $this->xmlReader = $xmlReader;
+    protected $xml;
+    public function __construct(xml $xmlReader){
+        $this->xml = $xmlReader->getXml();
     }
 
     abstract public function display();
 }
 
-class xmlReader{
+class xml{
     private $xml;
     public function read($url){
         $this->xml = simplexml_load_file($url);
@@ -23,13 +26,12 @@ class xmlReader{
 }
 
 class RSS1Reader extends RSSReader{
-    public function __construct(xmlReader $xmlReader){
+    public function __construct(xml $xmlReader){
         parent::__construct($xmlReader);
     }
 
     public function display(){
-        $xml = $this->xmlReader->getXml();
-        foreach($xml->item as $item){
+        foreach($this->xml->item as $item){
             echo <<<HTML
             <ul>
                 <li>{$item->title}</li>
@@ -46,17 +48,16 @@ HTML;
 }
 
 class RSS2Reader extends RSSReader{
-    public function __construct(xmlReader $xmlReader){
+    public function __construct(xml $xmlReader){
         parent::__construct($xmlReader);
     }
 
     public function display(){
-        $xml = $this->xmlReader->getXml();
-        foreach($xml->channel->item as $item){
+        foreach($this->xml->channel->item as $item){
             echo <<<HTML
             <ul>
                 <li>{$item->title}</li>
-                <li><a href="{{$item->link}}">{$item->link}</a></li>
+                <li><a href="{$item->link}">{$item->link}</a></li>
                 <li>{$item->description}</li>
             </ul>
 HTML;
@@ -69,38 +70,46 @@ HTML;
 }
 
 class ATOMReader extends RSSReader{
-    public function __construct(xmlReader $xmlReader){
+    public function __construct(xml $xmlReader){
         parent::__construct($xmlReader);
     }
 
     public function display(){
-        $xml = $this->xmlReader->getXml();
-        foreach($xml->feed->entry as $entry){
+        foreach($this->xml->entry as $entry){
             echo <<<HTML
             <ul>
-                <li>{$entry->title}</li>
-                <li><a href="{{$entry->link['href']}}">{$entry->link['href']}</a></li>
-                <li>{$entry->summary}</li>
+                <li>{$entry->id}</li>
+                <li><a href="{$entry->link['href']}">{$entry->link['href']}</a></li>
+                <li>{$entry->content}</li>
             </ul>
 HTML;
         }
     }
 
     public function accept(){
-        return isset($this->xml->feed->entry);
+        return isset($this->xml->entry);
     }
 }
 
-$url = "https://rss.itmedia.co.jp/rss/1.0/techtarget.xml";
-$xmlReader = new xmlReader();
-$xmlReader->read($url);
+$rssurl = [
+    "https://rss.itmedia.co.jp/rss/1.0/techtarget.xml",
+    "http://ascii.jp/rss.xml",
+    "https://github.com/fog/fog-sakuracloud/wiki.atom"
+];
 
-$rssReaders[] = new RSS1Reader($xmlReader);
-$rssReaders[] = new RSS2Reader($xmlReader);
-$rssReaders[] = new ATOMReader($xmlReader);
+foreach($rssurl as $url){
+    $xmlReader = new xml();
+    $xmlReader->read($url);
 
-foreach($rssReaders as $rss){
-    if ($rss->accept()){
-        $rss->display();
+    $rssReaders   = [];
+    $rssReaders[] = new RSS1Reader($xmlReader);
+    $rssReaders[] = new RSS2Reader($xmlReader);
+    $rssReaders[] = new ATOMReader($xmlReader);
+
+    foreach($rssReaders as $rss){
+        if ($rss->accept()){
+            $rss->display();
+            break;
+        }
     }
 }
